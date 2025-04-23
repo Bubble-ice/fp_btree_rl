@@ -199,6 +199,7 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
     episode_rewards = []
 
     for episode in range(start_episode, config.max_episodes):
+        print("\n" + "-" * 10)
         state = env.reset()
         episode_reward = 0
         done = False
@@ -225,12 +226,14 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
                 env.show_info()
 
         episode_rewards.append(episode_reward)
-        print(f"Episode {episode} | Reward: {episode_reward} | Steps: {step_count}")
+        print(f"\nEpisode {episode} | Reward: {episode_reward} | Steps: {step_count}")
+        print("cost list:", env.get_cost_list())
 
         if episode % 50 == 0:
             model_path = models_dir / f"ppo_{episode}.pth"
             torch.save(agent.policy.state_dict(), model_path)
             print(f"Model saved to {model_path}")
+        print("\n\n")
 
     return episode_rewards
 

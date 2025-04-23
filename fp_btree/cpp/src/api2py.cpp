@@ -431,6 +431,7 @@ py::tuple FplanEnv::step(bool act_bool)
 
         double reward = 0.0;
     }
+
     return py::make_tuple(arr, reward, done);
 }
 
