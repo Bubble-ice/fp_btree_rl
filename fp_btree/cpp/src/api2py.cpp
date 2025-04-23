@@ -322,7 +322,7 @@ FplanEnv::FplanEnv(std::string fn, float calpha, int max_times)
     reset();
 }
 
-void FplanEnv::reset(int seed)
+py::array_t<double> FplanEnv::reset(int seed)
 {
     if (seed > 0)
         srand(seed);
@@ -347,7 +347,8 @@ void FplanEnv::reset(int seed)
     cost_list.clear();              // 清空成本列表
     cost_list.push_back(init_cost); // 加入成本列表
 
-    this->go1step(bt->perturb_gen(1)[0]);
+    this->has_rolled_back = false;
+    return this->go1step(bt->perturb_gen(1)[0])[0].cast<py::array_t<double>>();
 }
 
 vector<Action> FplanEnv::act_gen_batch(u_int32_t num)

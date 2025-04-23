@@ -209,6 +209,8 @@ def train(env: FplanEnv, agent: PPO, config: Config):
                 st = time.time()
                 agent.update()
                 print(f"Update time: {time.time() - st:.2f}s")
+                print("env statu:")
+                env.show_info()
 
         episode_rewards.append(episode_reward)
         print(f"Episode {episode} | Reward: {episode_reward} | Steps: {step_count}")

@@ -82,7 +82,7 @@ class FplanEnv
 {
 public:
   FplanEnv(std::string fn, float calpha = 1, int max_times = 5000);
-  void reset(int seed = NIL);
+  py::array_t<double> reset(int seed = NIL);
 
   vector<Action> act_gen_batch(u_int32_t num = 1);
 
