@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import time
 import torch
@@ -11,6 +12,9 @@ from warp_env import FplanEnvWrap
 ROOT_PATH = Path(__file__).parent.parent
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("run in", device)
+
+models_dir = ROOT_PATH / "models"
+os.makedirs(models_dir, exist_ok=True)
 
 
 class Config:
@@ -210,9 +214,9 @@ def train(env: FplanEnvWrap, agent: PPO, config: Config):
         print(f"Episode {episode} | Reward: {episode_reward} | Steps: {step_count}")
 
         if episode % 50 == 0:
-            torch.save(
-                agent.policy.state_dict(), ROOT_PATH / f"models/ppo_{episode}.pth"
-            )
+            model_path = models_dir / f"ppo_{episode}.pth"
+            torch.save(agent.policy.state_dict(), model_path)
+            print(f"Model saved to {model_path}")
 
     return episode_rewards
 
