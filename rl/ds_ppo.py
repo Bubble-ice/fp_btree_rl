@@ -1,0 +1,227 @@
+from pathlib import Path
+import time
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.distributions import Bernoulli
+
+from warp_env import FplanEnvWrap
+
+ROOT_PATH = Path(__file__).parent.parent
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("run in", device)
+
+
+class Config:
+    def __init__(self):
+        # 优化后的超参数
+        self.gamma = 0.99
+        self.lr = 3e-4
+        self.epochs = 4  # 减少训练轮数
+        self.clip_epsilon = 0.2
+        self.entropy_coef = 0.01
+        self.value_coef = 0.5
+        self.max_grad_norm = 0.5
+        self.batch_size = 256  # 增大批量大小
+        self.buffer_size = 4096  # 增大经验回放缓冲区
+        self.hidden_size = 256  # 增大网络容量
+        self.update_interval = 4096  # 与buffer_size对齐
+        self.max_episodes = 2048
+        self.gae_lambda = 0.95  # 新增GAE参数
+
+
+class ActorCritic(nn.Module):
+    def __init__(self, state_dim, hidden_size):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+        )
+        self.actor = nn.Linear(hidden_size, 1)
+        self.critic = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        x = self.net(x)
+        return torch.sigmoid(self.actor(x)), self.critic(x)
+
+
+class PPO:
+    def __init__(self, state_dim, config):
+        self.config = config
+        self.state_dim = state_dim
+
+        self.policy = ActorCritic(state_dim, config.hidden_size).to(device)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=config.lr)
+        self.old_policy = ActorCritic(state_dim, config.hidden_size).to(device)
+        self.old_policy.load_state_dict(self.policy.state_dict())
+
+        # 预分配GPU内存
+        self._init_buffers()
+
+    def _init_buffers(self):
+        buffer_size = self.config.buffer_size
+        self.states = torch.zeros((buffer_size, self.state_dim), device=device)
+        self.actions = torch.zeros((buffer_size, 1), device=device)
+        self.rewards = torch.zeros((buffer_size, 1), device=device)
+        self.next_states = torch.zeros((buffer_size, self.state_dim), device=device)
+        self.dones = torch.zeros((buffer_size, 1), device=device)
+        self.log_probs = torch.zeros((buffer_size, 1), device=device)
+        self.ptr = 0
+        self.full = False
+
+    def store_transition(self, state, action, reward, next_state, done, log_prob):
+        idx = self.ptr % self.config.buffer_size
+        self.states[idx] = torch.as_tensor(state, device=device)
+        self.actions[idx] = torch.tensor([action], device=device)
+        self.rewards[idx] = torch.tensor([reward], device=device)
+        self.next_states[idx] = torch.as_tensor(next_state, device=device)
+        self.dones[idx] = torch.tensor([done], device=device)
+        self.log_probs[idx] = torch.tensor([log_prob], device=device)
+        self.ptr += 1
+        if self.ptr >= self.config.buffer_size:
+            self.full = True
+            self.ptr = 0
+
+    def select_action(self, state):
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=device)
+        with torch.no_grad():
+            action_probs, _ = self.old_policy(state_tensor.unsqueeze(0))
+        m = Bernoulli(action_probs)
+        action = m.sample()
+        return action.item() > 0.5, m.log_prob(action).item()
+
+    def compute_gae(self, values, next_values):
+        advantages = torch.zeros_like(self.rewards)
+        last_gae_lam = 0
+        for t in reversed(range(len(self.rewards))):
+            if t == len(self.rewards) - 1:
+                next_non_terminal = 1.0 - self.dones[t]
+                next_value = next_values[t]
+            else:
+                next_non_terminal = 1.0 - self.dones[t]
+                next_value = values[t + 1]
+            delta = (
+                self.rewards[t]
+                + self.config.gamma * next_value * next_non_terminal
+                - values[t]
+            )
+            advantages[t] = last_gae_lam = (
+                delta
+                + self.config.gamma
+                * self.config.gae_lambda
+                * next_non_terminal
+                * last_gae_lam
+            )
+        return advantages
+
+    def update(self):
+        if not self.full and self.ptr < self.config.buffer_size:
+            return
+
+        with torch.no_grad():
+            old_values = self.old_policy(self.states)[1]
+            next_values = self.old_policy(self.next_states)[1]
+            advantages = self.compute_gae(old_values, next_values)
+            returns = advantages + old_values
+
+        self.old_policy.load_state_dict(self.policy.state_dict())
+
+        # 打乱索引
+        indices = torch.randperm(self.config.buffer_size, device=device)
+
+        for _ in range(self.config.epochs):
+            for start in range(0, self.config.buffer_size, self.config.batch_size):
+                batch_idx = indices[start : start + self.config.batch_size]
+
+                batch_states = self.states[batch_idx]
+                batch_actions = self.actions[batch_idx]
+                batch_old_log_probs = self.log_probs[batch_idx]
+                batch_advantages = advantages[batch_idx]
+                batch_returns = returns[batch_idx]
+
+                action_probs, values = self.policy(batch_states)
+                dist = Bernoulli(action_probs)
+                log_probs = dist.log_prob(batch_actions)
+
+                ratios = (log_probs - batch_old_log_probs).exp()
+                surr1 = ratios * batch_advantages
+                surr2 = (
+                    torch.clamp(
+                        ratios,
+                        1 - self.config.clip_epsilon,
+                        1 + self.config.clip_epsilon,
+                    )
+                    * batch_advantages
+                )
+                policy_loss = -torch.min(surr1, surr2).mean()
+
+                value_loss = F.mse_loss(values, batch_returns)
+
+                entropy = dist.entropy().mean()
+
+                loss = (
+                    policy_loss
+                    + self.config.value_coef * value_loss
+                    - self.config.entropy_coef * entropy
+                )
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(
+                    self.policy.parameters(), self.config.max_grad_norm
+                )
+                self.optimizer.step()
+
+        self.full = False
+        self.ptr = 0
+
+
+def train(env: FplanEnvWrap, agent: PPO, config: Config):
+    episode_rewards = []
+
+    for episode in range(config.max_episodes):
+        state = env.reset()
+        episode_reward = 0
+        done = False
+        step_count = 0
+
+        while not done:
+            # 收集完整缓冲区
+            while not agent.full and not done:
+                action, log_prob = agent.select_action(state)
+                next_state, reward, done, _ = env.step(action)
+                agent.store_transition(
+                    state, action, reward, next_state, done, log_prob
+                )
+                state = next_state
+                episode_reward += reward
+                step_count += 1
+
+            if agent.full:
+                print(f"Updating at episode {episode} step {step_count}...")
+                st = time.time()
+                agent.update()
+                print(f"Update time: {time.time() - st:.2f}s")
+
+        episode_rewards.append(episode_reward)
+        print(f"Episode {episode} | Reward: {episode_reward} | Steps: {step_count}")
+
+        if episode % 50 == 0:
+            torch.save(
+                agent.policy.state_dict(), ROOT_PATH / f"models/ppo_{episode}.pth"
+            )
+
+    return episode_rewards
+
+
+if __name__ == "__main__":
+    file_path = ROOT_PATH / "raw_data" / "ami33"
+    env = FplanEnvWrap(file_path.__str__(), max_times=5000)
+
+    config = Config()
+    agent = PPO(env.state_dim, config)
+
+    rewards = train(env, agent, config)
