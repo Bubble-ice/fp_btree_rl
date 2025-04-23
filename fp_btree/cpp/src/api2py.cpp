@@ -353,8 +353,9 @@ py::array_t<double> FplanEnv::reset(int seed)
     this->cost_list.push_back(init_cost); // 加入成本列表
 
     this->has_rolled_back = false;
-    this->pre_statu = this->go1step(bt->perturb_gen(1)[0])[0];
-    return this->pre_statu.cast<py::array_t<double>>();
+    this->pre_statu = this->go1step(bt->perturb_gen(1)[0]);
+
+    return this->pre_statu[0].cast<py::array_t<double>>();
 }
 
 vector<Action> FplanEnv::act_gen_batch(u_int32_t num)
