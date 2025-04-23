@@ -320,8 +320,6 @@ FplanEnv::FplanEnv(std::string fn, float calpha, int max_times)
     baseline = 1 - (optimal_cost / init_cost);
 
     reset();
-    this->init_area = bt->getArea();
-    this->init_wirelen = bt->getWireLength();
 }
 
 py::array_t<double> FplanEnv::reset(int seed)
@@ -345,9 +343,12 @@ py::array_t<double> FplanEnv::reset(int seed)
     bt->packing();
     bt->set_normalize(norm_a, norm_w); // 同步归一化的基准值
 
-    t = 0;                          // 清空计数
-    cost_list.clear();              // 清空成本列表
-    cost_list.push_back(init_cost); // 加入成本列表
+    this->init_area = bt->getArea();
+    this->init_wirelen = bt->getWireLength();
+
+    t = 0;                                // 清空计数
+    this->cost_list.clear();              // 清空成本列表
+    this->cost_list.push_back(init_cost); // 加入成本列表
 
     this->has_rolled_back = false;
     return this->go1step(bt->perturb_gen(1)[0])[0].cast<py::array_t<double>>();
