@@ -11,7 +11,11 @@ wheels/
 
 # model and dataset
 model/
+models/
 dataset/
 
 # vscode config
 .vscode
+
+# .so
+*.so
