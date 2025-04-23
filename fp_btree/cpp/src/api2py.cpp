@@ -319,6 +319,8 @@ FplanEnv::FplanEnv(std::string fn, float calpha, int max_times)
     double optimal_cost = run_with_sa(*bt).cost;
     baseline = 1 - (optimal_cost / init_cost);
 
+    cout << "SA result: " << "area" << bt->getArea() << ", wirelen" << bt->getWireLength() << endl;
+
     reset();
 }
 
