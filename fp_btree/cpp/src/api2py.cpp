@@ -320,6 +320,8 @@ FplanEnv::FplanEnv(std::string fn, float calpha, int max_times)
     baseline = 1 - (optimal_cost / init_cost);
 
     reset();
+    this->init_area = bt->getArea();
+    this->init_wirelen = bt->getWireLength();
 }
 
 py::array_t<double> FplanEnv::reset(int seed)
@@ -460,8 +462,12 @@ void FplanEnv::show_info()
 {
     cout << "--filename: " << this->filename;
     cout << " cost_alpha: " << this->cost_alpha << endl;
-    cout << "--t: \t" << this->t << endl;
-    cout << "--max_t: \t" << this->max_times << endl;
-    cout << "--init_cost: \t" << this->init_cost << endl;
-    cout << "--baseline: \t" << this->baseline << endl;
+    // cout << "--t: \t" << this->t << endl;
+    // cout << "--max_t: \t" << this->max_times << endl;
+    // cout << "--init_cost: \t" << this->init_cost << endl;
+    // cout << "--baseline: \t" << this->baseline << endl;
+    cout << "--area change: " << this->init_area;
+    cout << " --> " << bt->getArea() << endl;
+    cout << "--wirelen change: " << this->init_wirelen;
+    cout << " --> " << bt->getWireLength() << endl;
 }

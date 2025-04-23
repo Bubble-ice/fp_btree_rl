@@ -117,6 +117,8 @@ protected:
 
   bool has_rolled_back;
 
+  double init_area, init_wirelen;
+
   double norm_cost(double cost);
   void calc_d_mods_info(
       Modules_Info &mods_a,
