@@ -16,7 +16,7 @@
 char line[100], t1[40], t2[40];
 ifstream fs;
 
-FPlan::FPlan(float calpha = 1)
+FPlan::FPlan(float calpha)
 {
   norm_area = 1;
   norm_wire = 1;
@@ -125,7 +125,7 @@ void FPlan::read(string file)
   TotalArea = 0;
   for (int i = 0; i < modules_N; i++)
     TotalArea += modules[i].area;
-  
+
   fs.close();
 }
 

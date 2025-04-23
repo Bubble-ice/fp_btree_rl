@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Bernoulli
 
-from warp_env import FplanEnvWrap
+from fp_btree import FplanEnv
 
 ROOT_PATH = Path(__file__).parent.parent
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -183,7 +183,7 @@ class PPO:
         self.ptr = 0
 
 
-def train(env: FplanEnvWrap, agent: PPO, config: Config):
+def train(env: FplanEnv, agent: PPO, config: Config):
     episode_rewards = []
 
     for episode in range(config.max_episodes):
@@ -196,7 +196,7 @@ def train(env: FplanEnvWrap, agent: PPO, config: Config):
             # 收集完整缓冲区
             while not agent.full and not done:
                 action, log_prob = agent.select_action(state)
-                next_state, reward, done, _ = env.step(action)
+                next_state, reward, done = env.step(action)
                 agent.store_transition(
                     state, action, reward, next_state, done, log_prob
                 )
@@ -222,10 +222,11 @@ def train(env: FplanEnvWrap, agent: PPO, config: Config):
 
 
 if __name__ == "__main__":
-    file_path = ROOT_PATH / "raw_data" / "ami33"
-    env = FplanEnvWrap(file_path.__str__(), max_times=5000)
-
     config = Config()
+
+    file_path = ROOT_PATH / "raw_data" / "ami33"
+    env = FplanEnv(file_path.__str__(), max_times=config.update_interval)
+
     agent = PPO(env.state_dim, config)
 
     rewards = train(env, agent, config)

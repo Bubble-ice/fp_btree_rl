@@ -57,7 +57,7 @@ typedef vector<Module_Info> Modules_Info;
 class FPlan
 {
 public:
-  FPlan(float calpha);
+  FPlan(float calpha = 1.0);
   void read(string);
   virtual void init() = 0;
   virtual void packing();
@@ -100,7 +100,7 @@ protected:
   float cost_alpha;
   vector<vector<int>> connection;
 
-// private:
+  // private:
   void read_dimension(Module &);
   void read_IO_list(Module &, bool parent);
   void read_network();

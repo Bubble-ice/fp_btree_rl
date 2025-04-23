@@ -307,7 +307,7 @@ void B_Tree_Ext::perturb_run(Action act)
 
 FplanEnv::FplanEnv(std::string fn, float calpha, int max_times)
     : filename(fn), cost_alpha(calpha), max_times(max_times),
-      t(0), cost_list()
+      t(0), cost_list(), has_rolled_back(false)
 {
     bt = new B_Tree_Ext(fn, calpha);
     bt->normalize_cost(50);
@@ -346,6 +346,8 @@ void FplanEnv::reset(int seed)
     t = 0;                          // 清空计数
     cost_list.clear();              // 清空成本列表
     cost_list.push_back(init_cost); // 加入成本列表
+
+    this->go1step(bt->perturb_gen(1)[0]);
 }
 
 vector<Action> FplanEnv::act_gen_batch(u_int32_t num)
@@ -353,7 +355,7 @@ vector<Action> FplanEnv::act_gen_batch(u_int32_t num)
     return bt->perturb_gen(num);
 }
 
-py::tuple FplanEnv::step(Action act)
+py::tuple FplanEnv::go1step(Action act)
 {
     double cur_cost = 0.0, next_cost = 0.0;
     Modules_Info cur_ms_info, next_ms_info;
@@ -365,7 +367,6 @@ py::tuple FplanEnv::step(Action act)
     bt->keep_sol();
     bt->perturb_run(act);
     bt->packing();
-    t++;
 
     next_cost = bt->getCost();
     next_ms_info = bt->get_mods_info();
@@ -374,7 +375,7 @@ py::tuple FplanEnv::step(Action act)
 
     calc_d_mods_info(cur_ms_info, next_ms_info, changed_rate, changed_area);
 
-    py::array_t<double> arr({6});
+    py::array_t<double> arr({this->s_dim});
     auto buf = arr.mutable_unchecked<1>();
 
     buf(0) = changed_rate;
@@ -383,16 +384,41 @@ py::tuple FplanEnv::step(Action act)
     buf(3) = norm_cost(next_cost);
     buf(4) = norm_cost(*std::min_element(cost_list.begin(), cost_list.end()));
     buf(5) = norm_cost(std::accumulate(cost_list.begin(), cost_list.end(), 0.0) / cost_list.size());
+    buf(6) = this->t / this->max_times;
 
     double reward = (cur_cost - next_cost) / baseline;
     bool done = (t >= max_times);
     return py::make_tuple(arr, reward, done);
 }
 
-py::tuple FplanEnv::step_rand()
+py::tuple FplanEnv::step(bool act_bool)
 {
-    Action act = bt->perturb_gen(1)[0];
-    return step(act);
+    t++;
+
+    if (act_bool)
+    {
+        this->has_rolled_back = false;
+        return go1step(bt->perturb_gen(1)[0]);
+    }
+    else
+    {
+        if (!has_rolled_back)
+        {
+            this->recover();
+            this->has_rolled_back = true;
+        }
+
+        py::tuple tup = go1step(bt->perturb_gen(1)[0]);
+
+        py::array_t<double> arr = tup[0].cast<py::array_t<double>>();
+        auto buf = arr.mutable_unchecked<1>();
+        buf(6) = this->t / this->max_times;
+
+        double reward = 0.0;
+        bool done = (this->t >= this->max_times);
+
+        return py::make_tuple(arr, reward, done);
+    }
 }
 
 void FplanEnv::recover()
@@ -427,4 +453,14 @@ void FplanEnv::calc_d_mods_info(
 double FplanEnv::norm_cost(double cost)
 {
     return std::min(1.0, cost / init_cost - 1);
+}
+
+void FplanEnv::show_info()
+{
+    cout << "--filename: " << this->filename;
+    cout << " cost_alpha: " << this->cost_alpha << endl;
+    cout << "--t: \t" << this->t << endl;
+    cout << "--max_t: \t" << this->max_times << endl;
+    cout << "--init_cost: \t" << this->init_cost << endl;
+    cout << "--baseline: \t" << this->baseline << endl;
 }

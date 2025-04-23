@@ -14,7 +14,8 @@
 
 namespace py = pybind11;
 
-struct PinNode{
+struct PinNode
+{
   int id;
   int mod_id;
   int net_id;
@@ -23,16 +24,18 @@ struct PinNode{
   int pin_x, pin_y; // absolute position
 };
 
-enum ActionType{
+enum ActionType
+{
   ROTATE_FLIP,  // 旋转 + 可能翻转
   SWAP_NODES,   // 交换两个节点
   DELETE_INSERT // 删除并重新插入
 };
 
-struct Action{
+struct Action
+{
   ActionType type;
-  int node1; // 主节点
-  int node2 = -1; // 第二节点
+  int node1;         // 主节点
+  int node2 = -1;    // 第二节点
   bool flip = false; // 是否翻转
 };
 
@@ -50,7 +53,8 @@ public:
 
   double get_norm_area() { return norm_area; };
   double get_norm_wire() { return norm_wire; };
-  void set_normalize(double norm_a, double norm_w){
+  void set_normalize(double norm_a, double norm_w)
+  {
     norm_area = norm_a, norm_wire = norm_w;
   };
 
@@ -82,16 +86,19 @@ public:
 
   vector<Action> act_gen_batch(u_int32_t num = 1);
 
-  
+  py::tuple go1step(Action act);
+  py::tuple step(bool act_bool);
 
-  py::tuple step(Action act);
-  py::tuple step_rand();
   void recover();
 
   double get_cost() { return bt->getCost(); };
   double get_init_cost() { return init_cost; };
   double get_baseline() { return baseline; };
   vector<double> get_cost_list() { return cost_list; };
+
+  void show_info();
+
+  const uint32_t s_dim = 6;
 
 protected:
   B_Tree_Ext *bt;
@@ -107,6 +114,8 @@ protected:
   double init_cost;
 
   double baseline;
+
+  bool has_rolled_back;
 
   double norm_cost(double cost);
   void calc_d_mods_info(
