@@ -353,7 +353,8 @@ py::array_t<double> FplanEnv::reset(int seed)
     this->cost_list.push_back(init_cost); // 加入成本列表
 
     this->has_rolled_back = false;
-    return this->go1step(bt->perturb_gen(1)[0])[0].cast<py::array_t<double>>();
+    this->pre_statu = this->go1step(bt->perturb_gen(1)[0])[0];
+    return this->pre_statu.cast<py::array_t<double>>();
 }
 
 vector<Action> FplanEnv::act_gen_batch(u_int32_t num)
@@ -400,11 +401,18 @@ py::tuple FplanEnv::go1step(Action act)
 py::tuple FplanEnv::step(bool act_bool)
 {
     t++;
-
+    py::array_t<double> arr;
+    double reward;
+    bool done = (this->t >= this->max_times);
     if (act_bool)
     {
         this->has_rolled_back = false;
-        return go1step(bt->perturb_gen(1)[0]);
+        py::tuple tup_t = this->pre_statu;
+        this->pre_statu = go1step(bt->perturb_gen(1)[0]);
+
+        arr = this->pre_statu[0].cast<py::array_t<double>>();
+
+        reward = tup_t[1].cast<double>();
     }
     else
     {
@@ -416,15 +424,13 @@ py::tuple FplanEnv::step(bool act_bool)
 
         py::tuple tup = go1step(bt->perturb_gen(1)[0]);
 
-        py::array_t<double> arr = tup[0].cast<py::array_t<double>>();
+        arr = tup[0].cast<py::array_t<double>>();
         auto buf = arr.mutable_unchecked<1>();
         buf(6) = this->t / this->max_times;
 
         double reward = 0.0;
-        bool done = (this->t >= this->max_times);
-
-        return py::make_tuple(arr, reward, done);
     }
+    return py::make_tuple(arr, reward, done);
 }
 
 void FplanEnv::recover()

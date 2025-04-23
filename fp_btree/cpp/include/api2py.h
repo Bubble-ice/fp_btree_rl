@@ -115,6 +115,7 @@ protected:
 
   double baseline;
 
+  py::tuple pre_statu;
   bool has_rolled_back;
 
   double init_area, init_wirelen;
