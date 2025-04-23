@@ -35,6 +35,7 @@ class Config:
         self.update_interval = 4096  # 与buffer_size对齐
         self.max_episodes = 2048
         self.gae_lambda = 0.95  # 新增GAE参数
+        self.max_times = 8192
 
 
 class ActorCritic(nn.Module):
@@ -267,7 +268,7 @@ if __name__ == "__main__":
     config = Config()
 
     file_path = ROOT_PATH / "raw_data" / "ami33"
-    env = FplanEnv(file_path.__str__(), max_times=config.update_interval)
+    env = FplanEnv(file_path.__str__(), max_times=config.max_times)
 
     agent = PPO(env.state_dim, config)
     if args.resume is not None:
@@ -281,6 +282,7 @@ if __name__ == "__main__":
             print(f"Error loading checkpoint: {str(e)}")
             exit(1)
     else:
+        args.resume = -1
         print(f"model file ppo_{args.resume}.pth no exit.")
 
     rewards = train(env, agent, config, args.resume + 1)
