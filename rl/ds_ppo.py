@@ -205,11 +205,14 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
         done = False
         step_count = 0
 
+        reward_list = []
+
         while not done:
             # 收集完整缓冲区
             while not agent.full and not done:
                 action, log_prob = agent.select_action(state)
                 next_state, reward, done = env.step(action)
+                reward_list.append(reward)
                 agent.store_transition(
                     state, action, reward, next_state, done, log_prob
                 )
@@ -227,7 +230,7 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
 
         episode_rewards.append(episode_reward)
         print(f"\nEpisode {episode} | Reward: {episode_reward} | Steps: {step_count}")
-        print("cost list:", env.get_cost_list())
+        print(reward_list)
 
         if episode % 50 == 0:
             model_path = models_dir / f"ppo_{episode}.pth"
