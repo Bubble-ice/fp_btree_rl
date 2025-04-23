@@ -1,3 +1,5 @@
+import argparse
+import csv
 import os
 from pathlib import Path
 import time
@@ -64,6 +66,16 @@ class PPO:
 
         # 预分配GPU内存
         self._init_buffers()
+
+    def load_checkpoint(self, ckpt_path):
+        """加载模型检查点"""
+        if not os.path.exists(ckpt_path):
+            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
+
+        state_dict = torch.load(ckpt_path, map_location=device)
+        self.policy.load_state_dict(state_dict)
+        self.old_policy.load_state_dict(state_dict)
+        print(f"Successfully loaded checkpoint from {ckpt_path}")
 
     def _init_buffers(self):
         buffer_size = self.config.buffer_size
@@ -183,10 +195,10 @@ class PPO:
         self.ptr = 0
 
 
-def train(env: FplanEnv, agent: PPO, config: Config):
+def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
     episode_rewards = []
 
-    for episode in range(config.max_episodes):
+    for episode in range(start_episode, config.max_episodes):
         state = env.reset()
         episode_reward = 0
         done = False
@@ -223,12 +235,48 @@ def train(env: FplanEnv, agent: PPO, config: Config):
     return episode_rewards
 
 
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="PPO Training with Resume")
+    parser.add_argument(
+        "--resume",
+        type=int,
+        default=None,
+        help="Model checkpoint episode number to resume training (e.g. 50 for ppo_50.pth)",
+    )
+    return parser.parse_args()
+
+
+def save_rewards(rewards, filename="training_rewards.csv"):
+    """保存奖励数据到CSV文件"""
+    with open(models_dir / filename, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Episode", "Reward"])
+        for i, r in enumerate(rewards):
+            writer.writerow([i, r])
+
+
 if __name__ == "__main__":
+    args = parse_args()
     config = Config()
 
     file_path = ROOT_PATH / "raw_data" / "ami33"
     env = FplanEnv(file_path.__str__(), max_times=config.update_interval)
 
     agent = PPO(env.state_dim, config)
+    if args.resume is not None:
+        ckpt_path = models_dir / f"ppo_{args.resume}.pth"
+        try:
+            agent.load_checkpoint(ckpt_path)
+            print(f"Resuming training from episode {args.resume}")
+            # 可以在此调整初始episode计数（如果需要）
+            # start_episode = args.resume + 1
+        except Exception as e:
+            print(f"Error loading checkpoint: {str(e)}")
+            exit(1)
+    else:
+        print(f"model file ppo_{args.resume}.pth no exit.")
 
-    rewards = train(env, agent, config)
+    rewards = train(env, agent, config, args.resume + 1)
+
+    save_rewards(rewards)
