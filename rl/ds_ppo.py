@@ -29,13 +29,13 @@ class Config:
         self.entropy_coef = 0.01
         self.value_coef = 0.5
         self.max_grad_norm = 0.5
-        self.batch_size = 256  # 增大批量大小
-        self.buffer_size = 4096  # 增大经验回放缓冲区
+        self.batch_size = 32  # 增大批量大小
+        self.buffer_size = 128  # 增大经验回放缓冲区
         self.hidden_size = 256  # 增大网络容量
-        self.update_interval = 4096  # 与buffer_size对齐
-        self.max_episodes = 2048
+        self.update_interval = 100  # 与buffer_size对齐
+        self.max_episodes = 200
         self.gae_lambda = 0.95  # 新增GAE参数
-        self.max_times = 8192
+        self.max_times = 1000
 
 
 class ActorCritic(nn.Module):
@@ -56,7 +56,7 @@ class ActorCritic(nn.Module):
 
 
 class PPO:
-    def __init__(self, state_dim, config):
+    def __init__(self, state_dim: int, config: Config):
         self.config = config
         self.state_dim = state_dim
 
@@ -200,20 +200,23 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
     episode_rewards = []
 
     for episode in range(start_episode, config.max_episodes):
-        print("\n" + "-" * 10)
+        print("\n" + "-" * 10, f"Episode {episode}")
         state = env.reset()
         episode_reward = 0
         done = False
         step_count = 0
 
-        reward_list = []
+        accept_cnt = 0
 
         while not done:
             # 收集完整缓冲区
             while not agent.full and not done:
                 action, log_prob = agent.select_action(state)
+
+                accept_cnt += action
+
                 next_state, reward, done = env.step(action)
-                reward_list.append(reward)
+
                 agent.store_transition(
                     state, action, reward, next_state, done, log_prob
                 )
@@ -222,22 +225,25 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
                 step_count += 1
 
             if agent.full:
-                print(f"Updating at episode {episode} step {step_count}...")
-                st = time.time()
+                # print(f"Updating at episode {episode} step {step_count}...")
+                # st = time.time()
                 agent.update()
-                print(f"Update time: {time.time() - st:.2f}s")
-                print("env statu:")
-                env.show_info()
+                # print(f"Update time: {time.time() - st:.2f}s")
+                # print("env statu:")
+                # env.show_info()
 
         episode_rewards.append(episode_reward)
-        print(f"\nEpisode {episode} | Reward: {episode_reward} | Steps: {step_count}")
-        print(reward_list)
+        reject_rate = (step_count - accept_cnt) / step_count
+        print(
+            f"Reward: {episode_reward:.5f} | Steps: {step_count} | Reject: {reject_rate * 100:.2f}%."
+        )
+        print("-" * 11)
+        # print(reward_list)
 
         if episode % 50 == 0:
             model_path = models_dir / f"ppo_{episode}.pth"
             torch.save(agent.policy.state_dict(), model_path)
             print(f"Model saved to {model_path}")
-        print("\n\n")
 
     return episode_rewards
 
@@ -246,9 +252,10 @@ def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description="PPO Training with Resume")
     parser.add_argument(
+        "-r",
         "--resume",
         type=int,
-        default=None,
+        default=-1,
         help="Model checkpoint episode number to resume training (e.g. 50 for ppo_50.pth)",
     )
     return parser.parse_args()
@@ -271,7 +278,7 @@ if __name__ == "__main__":
     env = FplanEnv(file_path.__str__(), max_times=config.max_times)
 
     agent = PPO(env.state_dim, config)
-    if args.resume is not None:
+    if args.resume is not None and args.resume > 0:
         ckpt_path = models_dir / f"ppo_{args.resume}.pth"
         try:
             agent.load_checkpoint(ckpt_path)
@@ -281,9 +288,6 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error loading checkpoint: {str(e)}")
             exit(1)
-    else:
-        args.resume = -1
-        print(f"model file ppo_{args.resume}.pth no exit.")
 
     rewards = train(env, agent, config, args.resume + 1)
 

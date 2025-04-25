@@ -8,7 +8,7 @@ from torch.distributions import Bernoulli
 import numpy as np
 from collections import deque
 
-from warp_env import FplanEnvWrap
+from fp_btree import FplanEnv
 
 
 ROOT_PATH = Path(__file__).parent.parent
@@ -202,7 +202,7 @@ class PPO:
 
 
 # 训练函数
-def train(env: FplanEnvWrap, agent: PPO, config: Config):
+def train(env: FplanEnv, agent: PPO, config: Config):
     episode_rewards = []
 
     for episode in range(config.max_episodes):
@@ -214,7 +214,7 @@ def train(env: FplanEnvWrap, agent: PPO, config: Config):
             # 收集数据
             for _ in range(config.update_interval):
                 action, log_prob = agent.select_action(state)
-                next_state, reward, done, _ = env.step(action)
+                next_state, reward, done = env.step(action)
 
                 agent.store_transition(
                     state, action, reward, next_state, done, log_prob
@@ -244,7 +244,7 @@ def train(env: FplanEnvWrap, agent: PPO, config: Config):
 # 主函数
 if __name__ == "__main__":
     file_path = ROOT_PATH / "raw_data" / "ami33"
-    env = FplanEnvWrap(file_path.__str__(), max_times=2000)
+    env = FplanEnv(file_path.__str__(), max_times=2000)
 
     config = Config()
     agent = PPO(env.state_dim, config)

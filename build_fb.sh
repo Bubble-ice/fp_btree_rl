@@ -4,7 +4,7 @@
 cd fp_btree || { echo "Error: Failed to enter fp_btree directory"; exit 1; }
 
 # 编译 C++ 扩展模块
-uv run setup.py build_ext --inplace || { echo "Error: Build failed"; exit 1; }
+# uv run setup.py build_ext --inplace || { echo "Error: Build failed"; exit 1; }
 
 uv pip install -e . --no-build-isolation
 
