@@ -23,7 +23,7 @@ class Tester:
         self.cost_history = []
         self.step_count = 0
         self.max_steps = 10000  # 最大测试步数
-        self.min_cost_delta = 1e-3  # cost变化阈值，小于此值则停止
+        self.min_cost_delta = 1e-4  # cost变化阈值，小于此值则停止
         self.window_size = 100  # 计算cost变化的窗口大小
 
     def run_episode(self, render=False):
@@ -31,6 +31,7 @@ class Tester:
         state = self.env.reset()
         done = False
         total_reward = 0
+        self.step_count = 0
         self.cost_history = [self.env.get_cost()]  # 记录初始cost
 
         while not done:

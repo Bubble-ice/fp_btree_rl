@@ -199,7 +199,7 @@ class PPO:
 def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
     episode_rewards = []
 
-    for episode in range(start_episode, config.max_episodes):
+    for episode in range(start_episode, config.max_episodes + 1):
         print("\n" + "-" * 10, f"Episode {episode}")
         state = env.reset()
         episode_reward = 0
@@ -235,8 +235,9 @@ def train(env: FplanEnv, agent: PPO, config: Config, start_episode=0):
         episode_rewards.append(episode_reward)
         reject_rate = (step_count - accept_cnt) / step_count
         print(
-            f"Reward: {episode_reward:.5f} | Steps: {step_count} | Reject: {reject_rate * 100:.2f}%."
+            f"Reward: {episode_reward:.5f} | Steps: {step_count} | Reject: {reject_rate * 100:.2f}%;"
         )
+        print(f"Cost: {env.get_init_cost()} -> {env.get_cost()}.")
         print("-" * 11)
         # print(reward_list)
 
