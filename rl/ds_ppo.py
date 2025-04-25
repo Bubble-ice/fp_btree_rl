@@ -33,7 +33,7 @@ class Config:
         self.buffer_size = 128  # 增大经验回放缓冲区
         self.hidden_size = 256  # 增大网络容量
         self.update_interval = 100  # 与buffer_size对齐
-        self.max_episodes = 200
+        self.max_episodes = 2000
         self.gae_lambda = 0.95  # 新增GAE参数
         self.max_times = 1000
 
